@@ -20,6 +20,7 @@ Triple = namedtuple('Triple', ['start', 'length', 'symbol'], defaults=[0, 0, 0])
 QuartersCarried = namedtuple('QuartersCarried', ['length', 'symbol'], defaults=[0, NO_DATA])
 stub = os.getenv('HOME2', '/media/jazcap53/0951a155-3d9d-41c3-a827-0b609af3979f')
 
+
 class Chart:
     """
     Create a sleep chart from input data
@@ -373,8 +374,8 @@ class Chart:
 
 
 def main():
-    sheet_path = ('python_projects/spreadsheet_etl/' +
-                 'xtraneous/transform_input_sheet_043b.txt')
+    sheet_path = ('spreadsheet_etl/' +
+                  'xtraneous/transform_input_sheet_043b.txt')
     sheet_file = os.path.join(stub, sheet_path)
     # chart = Chart('/jazcap53/python_projects/spreadsheet_etl/' +
     #               'xtraneous/transform_input_sheet_043b.txt')

@@ -1,7 +1,7 @@
 from src.chart.chart_new import Chart
 from unittest.mock import Mock, MagicMock
 
-chart = Chart('/home/jazcap53/python_projects/spreadsheet_etl/'
+chart = Chart('/home/jazcap53/spreadsheet_etl/'
               'xtraneous/transform_input_sheet_043b.txt')
 chart.compile_date_re()
 read_file_iterator = chart.read_file()

@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 
-# file: src/extract/run_it_rf_class.py
+# file: src/extract/run_it.py
 # andrew jarcho
 # 2017-01-21
 
