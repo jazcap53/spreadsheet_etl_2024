@@ -36,7 +36,7 @@ def make_chart():
 
 
 @pytest.fixture()
-def open_input_file(filename='/home/jazcap53/python_projects/' +
+def open_input_file(filename='/home/jazcap53/' +
                              'spreadsheet_etl/src/chart/chart_raw_data.txt'):
     infile = open(filename)
     return infile
@@ -72,7 +72,7 @@ def test_get_a_line_again(open_input_file, make_chart):
     assert make_chart.curr_line == ' 2016-12-07 | 04:45:00 | 01:30:00 |      2'
 
 
-def test_ctor_makes_a_chart(input_file='/home/jazcap53/python_projects/' +
+def test_ctor_makes_a_chart(input_file='/home/jazcap53/' +
                                        'spreadsheet_etl/src/chart/' +
                                        'chart_raw_data.txt'):
     my_chart = Chart(input_file)
@@ -80,7 +80,6 @@ def test_ctor_makes_a_chart(input_file='/home/jazcap53/python_projects/' +
 
 
 def test_read_file_returns_iterator(input_file='/home/jazcap53/' +
-                                               'python_projects/' +
                                                'spreadsheet_etl/src/chart/' +
                                                'chart_raw_data.txt'):
     my_chart = Chart(input_file)

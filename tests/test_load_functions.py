@@ -29,13 +29,14 @@ def test_inserting_a_night_adds_one_to_night_count(my_setup):
     time_now = time_now[:last_colon_at] + ':00'
     engine = my_setup
     connection = engine.connect()
-    result = connection.execute("SELECT count(night_id) FROM slt_night")
+    result = connection.execute(text("SELECT count(night_id) FROM slt_night"))
     orig_ct = result.fetchone()[0]
     sql = text("INSERT INTO slt_night (start_date, start_time) "
                "VALUES (:date_today, :time_now)")
     data = {'date_today': date_today, 'time_now': time_now}
     connection.execute(sql, data)
-    result = connection.execute("SELECT count(night_id) FROM slt_night")
+    connection.commit()
+    result = connection.execute(text("SELECT count(night_id) FROM slt_night"))
     new_ct = result.fetchone()[0]
     assert orig_ct + 1 == new_ct
 
@@ -45,16 +46,16 @@ def test_inserting_a_nap_adds_one_to_nap_count(my_setup):
     duration = '02:45'
     engine = my_setup
     connection = engine.connect()
-    night_id_result = connection.execute("SELECT max(night_id) FROM slt_night")
+    night_id_result = connection.execute(text("SELECT max(night_id) FROM slt_night"))
     night_id = night_id_result.fetchone()[0]
-    result = connection.execute("SELECT count(nap_id) FROM slt_nap")
+    result = connection.execute(text("SELECT count(nap_id) FROM slt_nap"))
     orig_ct = result.fetchone()[0]
-    sql = text("INSERT INTO slt_nap(start_time, duration, night_id) "
-               "VALUES (:start_time_now, :duration, :night_id_result)")
-    data = {'start_time_now': start_time_now, 'duration': duration,
-            'night_id_result': night_id}
+    sql = text("INSERT INTO slt_nap(nap_id, start_time, duration, night_id) "
+               "VALUES (:orig_ct, :start_time_now, :duration, :night_id)")
+    data = {'orig_ct': orig_ct, 'start_time_now': start_time_now, 'duration': duration,
+            'night_id': night_id}
     connection.execute(sql, data)
-    result = connection.execute("SELECT count(nap_id) FROM slt_nap")
+    result = connection.execute(text("SELECT count(nap_id) FROM slt_nap"))
     new_ct = result.fetchone()[0]
     assert orig_ct + 1 == new_ct
 
