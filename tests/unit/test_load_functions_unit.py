@@ -15,17 +15,6 @@ def test_decimal_to_interval_invalid_input(caplog):
     assert "Value for dec_mins 80 not found in decimal_to_interval()" in caplog.text
 
 
-# def test_setup_network_logger(caplog):
-#     caplog.set_level(logging.INFO)
-#     setup_network_logger()
-#     root_logger = logging.getLogger('')
-#     assert root_logger.level == logging.INFO
-#     assert any(isinstance(handler, logging.handlers.SocketHandler) for handler in root_logger.handlers)
-#     # assert isinstance(root_logger.handlers[0], logging.handlers.SocketHandler)
-#     assert root_logger.handlers[0].host == 'localhost'
-#     assert root_logger.handlers[0].port == logging.handlers.DEFAULT_TCP_LOGGING_PORT
-
-
 def test_setup_network_logger(caplog):
     caplog.set_level(logging.INFO)
     setup_network_logger()
