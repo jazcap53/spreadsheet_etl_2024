@@ -1,6 +1,6 @@
 import logging
 
-from src.load.load import decimal_to_interval, setup_network_logger, setup_load_logger
+from src.load.load import main, decimal_to_interval, setup_network_logger, setup_load_logger
 
 
 def test_decimal_to_interval_valid_input():
@@ -37,3 +37,22 @@ def test_setup_load_logger():
     assert load_logger.handlers[0].baseFilename.endswith('src/load/load.log')
     assert load_logger.handlers[0].mode == 'w'
     assert load_logger.propagate == False
+
+
+def test_main(mocker):
+    # Mock setup_network_logger
+    mock_setup_network_logger = mocker.patch('src.load.load.setup_network_logger')
+
+    # Mock setup_load_logger
+    mock_setup_load_logger = mocker.patch('src.load.load.setup_load_logger')
+    mock_setup_load_logger.return_value = 'mocked_load_logger'
+
+    # Call the main function
+    load_logger = main()
+
+    # Check that setup_network_logger was called
+    mock_setup_network_logger.assert_called_once()
+
+    # Check that setup_load_logger was called and returned the correct logger
+    mock_setup_load_logger.assert_called_once()
+    assert load_logger == 'mocked_load_logger'
