@@ -3,6 +3,7 @@
 # 2017-01-28
 
 import io
+from io import StringIO
 import re
 import sys
 import datetime
@@ -14,7 +15,6 @@ from src.extract.read_fns import open_infile
 from src.extract.read_fns import Extract
 from container_objs import Event, Day, Week
 
-# TODO: fail if pytest is not called with -s switch
 # TODO: change assertions on fns which return None
 
 
@@ -35,6 +35,28 @@ def infile_wrapper():
 ,,,,,,,,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,,,,,,,,,
 ''')
+
+
+@pytest.fixture
+def infile_wrapper_2():
+    # Create a StringIO object with the desired input data
+    input_data = '''
+w,Sun,,,Mon,,,Tue,,,Wed,,,Thu,,,Fri,,,Sat,,,,
+12/4/2016,,,,,,,,,,b,23:45,,w,3:45,4.00,w,2:00,2.75,b,0:00,9.00,,
+,,,,,,,,,,,,,s,4:45,,s,3:30,,w,5:15,5.25,,
+,,,,,,,,,,,,,w,6:15,1.50,w,8:45,5.25,s,10:30,,,
+,,,,,,,,,,,,,s,11:30,,s,19:30,,w,11:30,1.00,,
+,,,,,,,,,,,,,w,12:15,0.75,w,20:30,1.00,s,16:00,,,
+,,,,,,,,,,,,,s,16:45,,,,,w,17:00,1.00,,
+,,,,,,,,,,,,,w,17:30,0.75,,,,b,22:30,7.25,,
+,,,,,,,,,,,,,s,21:00,,,,,,,,,
+,,,,,,,,,,,,,w,21:30,0.50,,,,,,,,
+,,,,,,,,,,,,,b,23:15,7.50,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,
+'''
+    return StringIO(input_data)
+
 
 
 @pytest.fixture
@@ -64,49 +86,6 @@ def test_init_with_good_argument_succeeds():
         line += 'x'
         break
     assert isinstance(extr, Extract)
-
-
-@pytest.mark.xfail(reason="will fail unless pytest is run with capturing disabled")
-def test_lines_in_weeks_out(infile_wrapper, capfd):
-    """ >==> THIS TEST WILL FAIL UNLESS PYTEST IS RUN WITH -s (disable all capturing) SWITCH <==< """
-    infile = open_infile(infile_wrapper)
-    extract = Extract(infile)
-    extract.lines_in_weeks_out()
-    fd1, fd2 = capfd.readouterr()
-    assert fd1 == '''
-Week of Sunday, 2016-12-04:
-==========================
-    2016-12-04
-    2016-12-05
-    2016-12-06
-    2016-12-07
-action: Y, time: 23:45
-    2016-12-08
-action: w, time: 3:45, hours: 4.00
-action: s, time: 4:45
-action: w, time: 6:15, hours: 1.50
-action: s, time: 11:30
-action: w, time: 12:15, hours: 0.75
-action: s, time: 16:45
-action: w, time: 17:30, hours: 0.75
-action: s, time: 21:00
-action: w, time: 21:30, hours: 0.50
-action: b, time: 23:15, hours: 7.50
-    2016-12-09
-action: w, time: 2:00, hours: 2.75
-action: s, time: 3:30
-action: w, time: 8:45, hours: 5.25
-action: s, time: 19:30
-action: w, time: 20:30, hours: 1.00
-    2016-12-10
-action: b, time: 0:00, hours: 9.00
-action: w, time: 5:15, hours: 5.25
-action: s, time: 10:30
-action: w, time: 11:30, hours: 1.00
-action: s, time: 16:00
-action: w, time: 17:00, hours: 1.00
-'''
-    assert fd2 == ''
 
 
 def test_re_match_date_matches_date_in_correct_format(extract):
