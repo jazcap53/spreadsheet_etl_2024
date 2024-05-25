@@ -1,3 +1,4 @@
+import builtins
 from datetime import datetime
 import logging
 import os
@@ -6,6 +7,7 @@ import subprocess
 import sys
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 
 from src.load.load import connect, read_nights_naps, store_nights_naps, setup_load_logger
 
@@ -61,6 +63,147 @@ def db_connection():
     engine = create_engine(url)
     yield engine
     engine.dispose()
+
+
+@pytest.fixture(scope="module")
+def db_connection_url():
+    url = None
+    try:
+        url = 'postgresql://{}:{}@localhost/sleep_test'.format(
+            os.environ['DB_TEST_USERNAME'], os.environ['DB_TEST_PASSWORD'])
+    except KeyError:
+        pytest.skip("Database credentials not found in environment variables")
+
+    yield url
+
+
+@pytest.fixture(autouse=True)
+def set_test_db_name():
+    original_db_name = os.environ.get('DB_NAME')
+    os.environ['DB_NAME'] = 'sleep_test'
+
+    # Store the original value of __name__
+    original_name = getattr(builtins, '__name__', None)
+
+    # Set __name__ to '__main__'
+    builtins.__name__ = '__main__'
+
+    yield
+
+    # Restore the original value of __name__
+    if original_name is not None:
+        builtins.__name__ = original_name
+    else:
+        delattr(builtins, '__name__')
+
+    if original_db_name is not None:
+        os.environ['DB_NAME'] = original_db_name
+    else:
+        del os.environ['DB_NAME']
+
+
+# def test_connect_with_file_input(tmp_path, db_connection_url, mocker):
+#     # Create a test file with sample data
+#     sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:15\n"
+#     test_file_path = tmp_path / "test_file.txt"
+#     test_file_path.write_text(sample_data)
+#
+#     # Save the original command line arguments
+#     original_sys_argv = sys.argv.copy()
+#
+#     # Create a mock logger object
+#     mock_logger = mocker.Mock()
+#
+#     try:
+#         # Inject the necessary command line arguments
+#         sys.argv = ["load.py", "True", str(test_file_path)]
+#
+#         # Patch the logging.getLogger() function to return the mock logger
+#         mocker.patch('logging.getLogger', return_value=mock_logger)
+#
+#         # Patch the setup_load_logger() function to return the mock logger
+#         mocker.patch('src.load.load.setup_load_logger', return_value=mock_logger)
+#
+#         # Call the connect function with the modified command line arguments
+#         connect(db_connection_url)
+#
+#         # Create a database engine using the connection URL
+#         engine = create_engine(db_connection_url)
+#
+#         # Query the database to check if the data was loaded correctly
+#         with engine.connect() as connection:
+#             # Check if the night record was inserted
+#             result = connection.execute(text("SELECT * FROM slt_night WHERE start_date = '2023-06-08' AND start_time = '22:00:00'"))
+#             night_record = result.fetchone()
+#             assert night_record is not None
+#             assert night_record['is_main_sleep'] == False
+#             assert night_record['is_on_vacation'] == False
+#
+#             # Check if the nap record was inserted
+#             result = connection.execute(text("SELECT * FROM slt_nap WHERE start_time = '14:30:00' AND duration = '01:15'"))
+#             nap_record = result.fetchone()
+#             assert nap_record is not None
+#
+#     finally:
+#         # Restore the original command line arguments
+#         sys.argv = original_sys_argv
+
+
+def test_connect_indirectly(tmp_path, db_connection_url):
+    # Create a test file with sample data
+    sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:15\n"
+    test_file_path = tmp_path / "test_file.txt"
+    test_file_path.write_text(sample_data)
+
+    # Save the original command line arguments and environment variables
+    original_sys_argv = sys.argv.copy()
+    original_env = os.environ.copy()
+
+    try:
+        # Inject the necessary command line arguments
+        sys.argv = ["load.py", "True", str(test_file_path)]
+
+        # Set the test database credentials as environment variables
+        os.environ['DB_USERNAME'] = os.environ['DB_TEST_USERNAME']
+        os.environ['DB_PASSWORD'] = os.environ['DB_TEST_PASSWORD']
+
+        # Run the load.py script as a separate process
+        subprocess.run(["python", "src/load/load.py"], check=True)
+
+        # Create a database engine using the connection URL
+        engine = create_engine(db_connection_url)
+
+        # Query the database to check if the data was loaded correctly
+        with engine.connect() as connection:
+            # Check if the night record was inserted
+            result = connection.execute(text("SELECT * FROM slt_night WHERE start_date = '2023-06-08' AND start_time = '22:00:00'"))
+            night_record = result.fetchone()
+            assert night_record is not None
+            assert night_record['is_main_sleep'] == False
+            assert night_record['is_on_vacation'] == False
+
+            # Check if the nap record was inserted
+            result = connection.execute(text("SELECT * FROM slt_nap WHERE start_time = '14:30:00' AND duration = '01:15'"))
+            nap_record = result.fetchone()
+            assert nap_record is not None
+
+    finally:
+        # Restore the original command line arguments and environment variables
+        sys.argv = original_sys_argv
+        os.environ.clear()
+        os.environ.update(original_env)
+
+
+def test_connect_without_file_input():
+    # Run the load.py script without any file input
+    result = subprocess.run(["python", "src/load/load.py", "True"],
+                            input="NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:15\n",
+                            capture_output=True, text=True)
+
+    # Check the exit code and captured output
+    assert result.returncode == 0
+    assert "load start" in result.stdout
+    assert "load finish" in result.stdout
 
 
 def test_lines_in_weeks_out(tmp_path):
@@ -124,69 +267,23 @@ action: w, time: 17:00, hours: 1.00
 '''
 
 
-@pytest.mark.xfail
-def test_connect_with_file_input(db_connection, mocker, tmp_path, monkeypatch):
-    # Create a test file with sample data
-    sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:15\n"
-    test_file_path = tmp_path / "test_file.txt"
-    test_file_path.write_text(sample_data)
-
-    # Print the path of the test file
-    print(f"Test file path: {test_file_path}")
-
-    # Modify sys.argv to include the test file path
-    monkeypatch.setattr('sys.argv', ['load.py', 'True', str(test_file_path)])
-
-    # Create the mock object for read_nights_naps
-    mock_read_nights_naps = mocker.patch('src.load.load.read_nights_naps', wraps=read_nights_naps)
-
-    # Create the mock object for store_nights_naps
-    mock_store_nights_naps = mocker.patch('src.load.load.store_nights_naps', wraps=store_nights_naps)
-
-    # Call connect function
-    connect(db_connection.url)
-
-    # Verify that read_nights_naps is called with the correct arguments
-    mock_read_nights_naps.assert_called_once_with(db_connection, str(test_file_path))
-
-    # Verify that store_nights_naps is called with the correct arguments
-    assert mock_store_nights_naps.call_count == 2
-    mock_store_nights_naps.assert_any_call(mocker.ANY, 'NIGHT, 2023-06-08, 22:00:00, false, false\n')
-    mock_store_nights_naps.assert_any_call(mocker.ANY, 'NAP, 14:30:00, 01:15\n')
+# @pytest.mark.xfail
+# def test_connect_failure(mocker):
+#     # Invalid database URL
+#     invalid_url = 'postgresql://invalid_user:invalid_password@localhost/invalid_db'
+#
+#     # Call connect function with invalid URL
+#     with pytest.raises(Exception):
+#         connect(invalid_url)
 
 
-@pytest.mark.xfail
-def test_connect_without_file_input(db_connection, mocker, capsys):
-    # Mocking sys.argv to simulate command-line arguments
-    mocker.patch('sys.argv', ['load.py', 'True'])
-
-    # Create the mock object for read_nights_naps
-    mock_read_nights_naps = mocker.patch('src.load.load.read_nights_naps', wraps=read_nights_naps)
-
-    # Simulate user input
-    input_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:15\n"
-    mocker.patch('sys.stdin.readline', side_effect=input_data.splitlines(keepends=True))
-
-    # Call connect function
-    connect(db_connection.url)
-
-    # Verify that read_nights_naps is called with the correct arguments
-    mock_read_nights_naps.assert_called_once_with(db_connection, '-')
-
-    # Verify the captured output
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
-
-
-@pytest.mark.xfail
-def test_connect_failure(mocker):
+@pytest.mark.xfail(raises=OperationalError)
+def test_connect_failure():
     # Invalid database URL
     invalid_url = 'postgresql://invalid_user:invalid_password@localhost/invalid_db'
 
     # Call connect function with invalid URL
-    with pytest.raises(Exception):
-        connect(invalid_url)
+    connect(invalid_url)
 
 
 def test_inserting_a_night_adds_one_to_night_count(my_setup):

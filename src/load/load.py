@@ -164,11 +164,10 @@ if __name__ == '__main__':
     load_logger = main()
     logging.info('load start')
     try:
-        url = 'postgresql://{}:{}@127.0.0.1/sleep'.format(
-                os.environ['DB_USERNAME'], os.environ['DB_PASSWORD'])
+        url = 'postgresql://{}:{}@127.0.0.1/{}'.format(
+                os.environ['DB_USERNAME'], os.environ['DB_PASSWORD'], os.environ['DB_NAME'])
     except KeyError:
-        print('Please set the environment variables DB_USERNAME and '
-              'DB_PASSWORD')
+        print('Please set the environment variables DB_USERNAME, DB_PASSWORD, and DB_NAME')
         sys.exit(1)
     connect(url)  # only c.l.a. will be 'True' or 'False'
     logging.info('load finish')
