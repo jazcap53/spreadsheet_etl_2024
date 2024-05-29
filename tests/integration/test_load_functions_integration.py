@@ -1,10 +1,11 @@
 import builtins
-from datetime import datetime
+from datetime import datetime, date as dt_date, time as dt_time
 import logging
 import os
 import pytest
 import subprocess
 import sys
+import time
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
@@ -102,56 +103,9 @@ def set_test_db_name():
         del os.environ['DB_NAME']
 
 
-# def test_connect_with_file_input(tmp_path, db_connection_url, mocker):
-#     # Create a test file with sample data
-#     sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:15\n"
-#     test_file_path = tmp_path / "test_file.txt"
-#     test_file_path.write_text(sample_data)
-#
-#     # Save the original command line arguments
-#     original_sys_argv = sys.argv.copy()
-#
-#     # Create a mock logger object
-#     mock_logger = mocker.Mock()
-#
-#     try:
-#         # Inject the necessary command line arguments
-#         sys.argv = ["load.py", "True", str(test_file_path)]
-#
-#         # Patch the logging.getLogger() function to return the mock logger
-#         mocker.patch('logging.getLogger', return_value=mock_logger)
-#
-#         # Patch the setup_load_logger() function to return the mock logger
-#         mocker.patch('src.load.load.setup_load_logger', return_value=mock_logger)
-#
-#         # Call the connect function with the modified command line arguments
-#         connect(db_connection_url)
-#
-#         # Create a database engine using the connection URL
-#         engine = create_engine(db_connection_url)
-#
-#         # Query the database to check if the data was loaded correctly
-#         with engine.connect() as connection:
-#             # Check if the night record was inserted
-#             result = connection.execute(text("SELECT * FROM slt_night WHERE start_date = '2023-06-08' AND start_time = '22:00:00'"))
-#             night_record = result.fetchone()
-#             assert night_record is not None
-#             assert night_record['is_main_sleep'] == False
-#             assert night_record['is_on_vacation'] == False
-#
-#             # Check if the nap record was inserted
-#             result = connection.execute(text("SELECT * FROM slt_nap WHERE start_time = '14:30:00' AND duration = '01:15'"))
-#             nap_record = result.fetchone()
-#             assert nap_record is not None
-#
-#     finally:
-#         # Restore the original command line arguments
-#         sys.argv = original_sys_argv
-
-
 def test_connect_indirectly(tmp_path, db_connection_url):
     # Create a test file with sample data
-    sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:15\n"
+    sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01.25\n"
     test_file_path = tmp_path / "test_file.txt"
     test_file_path.write_text(sample_data)
 
@@ -160,15 +114,19 @@ def test_connect_indirectly(tmp_path, db_connection_url):
     original_env = os.environ.copy()
 
     try:
+        # Check if the test database credentials are set as environment variables
+        assert os.environ['DB_TEST_USERNAME'], "DB_TEST_USERNAME environment variable is not set or is empty"
+        assert os.environ['DB_TEST_PASSWORD'], "DB_TEST_PASSWORD environment variable is not set or is empty"
+        assert os.environ['DB_NAME'] == 'sleep_test', "DB_NAME environment variable must be set to 'sleep_test'"
+
         # Inject the necessary command line arguments
-        sys.argv = ["load.py", "True", str(test_file_path)]
+        sys.argv = ["load.py", str(test_file_path), "True"]
 
-        # Set the test database credentials as environment variables
-        os.environ['DB_USERNAME'] = os.environ['DB_TEST_USERNAME']
-        os.environ['DB_PASSWORD'] = os.environ['DB_TEST_PASSWORD']
+        # Run the load.py script as a separate process, providing the input data
+        subprocess.run(["python", "src/load/load.py"] + sys.argv[1:], check=True)
 
-        # Run the load.py script as a separate process
-        subprocess.run(["python", "src/load/load.py"], check=True)
+        # Add a short delay to ensure the script has enough time to complete the data insertion
+        time.sleep(2)
 
         # Create a database engine using the connection URL
         engine = create_engine(db_connection_url)
@@ -176,14 +134,14 @@ def test_connect_indirectly(tmp_path, db_connection_url):
         # Query the database to check if the data was loaded correctly
         with engine.connect() as connection:
             # Check if the night record was inserted
-            result = connection.execute(text("SELECT * FROM slt_night WHERE start_date = '2023-06-08' AND start_time = '22:00:00'"))
+            result = connection.execute(text("SELECT * FROM sl_night WHERE start_date = '2023-06-08' AND start_time = '22:00:00'"))
             night_record = result.fetchone()
             assert night_record is not None
-            assert night_record['is_main_sleep'] == False
-            assert night_record['is_on_vacation'] == False
+            assert night_record[3] == False  # Check start_no_data
+            assert night_record[4] == False  # Check end_no_data
 
             # Check if the nap record was inserted
-            result = connection.execute(text("SELECT * FROM slt_nap WHERE start_time = '14:30:00' AND duration = '01:15'"))
+            result = connection.execute(text("SELECT * FROM sl_nap WHERE start_time = '14:30:00' AND duration = '01:15'"))
             nap_record = result.fetchone()
             assert nap_record is not None
 
@@ -294,14 +252,14 @@ def test_inserting_a_night_adds_one_to_night_count(my_setup):
     time_now = time_now[:last_colon_at] + ':00'
     engine = my_setup
     connection = engine.connect()
-    result = connection.execute(text("SELECT count(night_id) FROM slt_night"))
+    result = connection.execute(text("SELECT count(night_id) FROM sl_night"))
     orig_ct = result.fetchone()[0]
-    sql = text("INSERT INTO slt_night (start_date, start_time) "
+    sql = text("INSERT INTO sl_night (start_date, start_time) "
                "VALUES (:date_today, :time_now)")
     data = {'date_today': date_today, 'time_now': time_now}
     connection.execute(sql, data)
     connection.commit()
-    result = connection.execute(text("SELECT count(night_id) FROM slt_night"))
+    result = connection.execute(text("SELECT count(night_id) FROM sl_night"))
     new_ct = result.fetchone()[0]
     assert orig_ct + 1 == new_ct
 
@@ -311,16 +269,16 @@ def test_inserting_a_nap_adds_one_to_nap_count(my_setup):
     duration = '02:45'
     engine = my_setup
     connection = engine.connect()
-    night_id_result = connection.execute(text("SELECT max(night_id) FROM slt_night"))
+    night_id_result = connection.execute(text("SELECT max(night_id) FROM sl_night"))
     night_id = night_id_result.fetchone()[0]
-    result = connection.execute(text("SELECT count(nap_id) FROM slt_nap"))
+    result = connection.execute(text("SELECT count(nap_id) FROM sl_nap"))
     orig_ct = result.fetchone()[0]
-    sql = text("INSERT INTO slt_nap(nap_id, start_time, duration, night_id) "
+    sql = text("INSERT INTO sl_nap(nap_id, start_time, duration, night_id) "
                "VALUES (:orig_ct, :start_time_now, :duration, :night_id)")
     data = {'orig_ct': orig_ct, 'start_time_now': start_time_now, 'duration': duration,
             'night_id': night_id}
     connection.execute(sql, data)
-    result = connection.execute(text("SELECT count(nap_id) FROM slt_nap"))
+    result = connection.execute(text("SELECT count(nap_id) FROM sl_nap"))
     new_ct = result.fetchone()[0]
     assert orig_ct + 1 == new_ct
 
