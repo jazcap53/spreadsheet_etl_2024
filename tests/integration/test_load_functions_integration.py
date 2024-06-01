@@ -254,8 +254,8 @@ def test_inserting_a_night_adds_one_to_night_count(my_setup):
     connection = engine.connect()
     result = connection.execute(text("SELECT count(night_id) FROM sl_night"))
     orig_ct = result.fetchone()[0]
-    sql = text("INSERT INTO sl_night (start_date, start_time) "
-               "VALUES (:date_today, :time_now)")
+    sql = text("INSERT INTO sl_night (start_date, start_time, start_no_data, end_no_data) "
+               "VALUES (:date_today, :time_now, false, false)")
     data = {'date_today': date_today, 'time_now': time_now}
     connection.execute(sql, data)
     connection.commit()
