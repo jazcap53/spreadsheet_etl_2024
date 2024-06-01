@@ -103,30 +103,42 @@ def set_test_db_name():
         del os.environ['DB_NAME']
 
 
-def test_connect_indirectly(tmp_path, db_connection_url):
-    # Create a test file with sample data
-    sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01.25\n"
-    test_file_path = tmp_path / "test_file.txt"
-    test_file_path.write_text(sample_data)
+@pytest.mark.parametrize("input_data", [
+    None,
+    "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:15\n"
+])
+def test_connect_indirectly(tmp_path, db_connection_url, input_data):
+    """
+        Test the connect()  functionality indirectly.
 
+        NOTE: This test relies on the 'set_test_env_variables' fixture
+        to set the required environment variables for the test database.
+        """
     # Save the original command line arguments and environment variables
     original_sys_argv = sys.argv.copy()
     original_env = os.environ.copy()
 
     try:
-        # Check if the test database credentials are set as environment variables
-        assert os.environ['DB_TEST_USERNAME'], "DB_TEST_USERNAME environment variable is not set or is empty"
-        assert os.environ['DB_TEST_PASSWORD'], "DB_TEST_PASSWORD environment variable is not set or is empty"
-        assert os.environ['DB_NAME'] == 'sleep_test', "DB_NAME environment variable must be set to 'sleep_test'"
+        if input_data is None:
+            # Create a test file with sample data
+            sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:25\n"
+            test_file_path = tmp_path / "test_file.txt"
+            test_file_path.write_text(sample_data)
 
-        # Inject the necessary command line arguments
-        sys.argv = ["load.py", str(test_file_path), "True"]
+            # Inject the necessary command line arguments with the file path
+            sys.argv = ["load.py", str(test_file_path), "True"]
+        else:
+            # Inject the necessary command line arguments without the file path
+            sys.argv = ["load.py", "True"]
 
-        # Run the load.py script as a separate process, providing the input data
-        subprocess.run(["python", "src/load/load.py"] + sys.argv[1:], check=True)
+        # Run the load.py script as a separate process
+        if input_data is None:
+            subprocess.run(["python", "src/load/load.py"] + sys.argv[1:], check=True)
+        else:
+            subprocess.run(["python", "src/load/load.py"] + sys.argv[1:], input=input_data, text=True, check=True)
 
         # Add a short delay to ensure the script has enough time to complete the data insertion
-        time.sleep(2)
+        time.sleep(0.5)
 
         # Create a database engine using the connection URL
         engine = create_engine(db_connection_url)
@@ -137,8 +149,8 @@ def test_connect_indirectly(tmp_path, db_connection_url):
             result = connection.execute(text("SELECT * FROM sl_night WHERE start_date = '2023-06-08' AND start_time = '22:00:00'"))
             night_record = result.fetchone()
             assert night_record is not None
-            assert night_record[3] == False  # Check start_no_data
-            assert night_record[4] == False  # Check end_no_data
+            assert night_record[3] is False  # Check start_no_data
+            assert night_record[4] is False  # Check end_no_data
 
             # Check if the nap record was inserted
             result = connection.execute(text("SELECT * FROM sl_nap WHERE start_time = '14:30:00' AND duration = '01:15'"))
@@ -150,18 +162,6 @@ def test_connect_indirectly(tmp_path, db_connection_url):
         sys.argv = original_sys_argv
         os.environ.clear()
         os.environ.update(original_env)
-
-
-def test_connect_without_file_input():
-    # Run the load.py script without any file input
-    result = subprocess.run(["python", "src/load/load.py", "True"],
-                            input="NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:15\n",
-                            capture_output=True, text=True)
-
-    # Check the exit code and captured output
-    assert result.returncode == 0
-    assert "load start" in result.stdout
-    assert "load finish" in result.stdout
 
 
 def test_lines_in_weeks_out(tmp_path):
