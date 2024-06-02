@@ -273,14 +273,15 @@ def test_inserting_a_nap_adds_one_to_nap_count(my_setup):
     night_id = night_id_result.fetchone()[0]
     result = connection.execute(text("SELECT count(nap_id) FROM sl_nap"))
     orig_ct = result.fetchone()[0]
+    next_ct = orig_ct + 1
     sql = text("INSERT INTO sl_nap(nap_id, start_time, duration, night_id) "
-               "VALUES (:orig_ct, :start_time_now, :duration, :night_id)")
-    data = {'orig_ct': orig_ct, 'start_time_now': start_time_now, 'duration': duration,
+               "VALUES (:next_ct, :start_time_now, :duration, :night_id)")
+    data = {'next_ct': next_ct, 'start_time_now': start_time_now, 'duration': duration,
             'night_id': night_id}
     connection.execute(sql, data)
     result = connection.execute(text("SELECT count(nap_id) FROM sl_nap"))
     new_ct = result.fetchone()[0]
-    assert orig_ct + 1 == new_ct
+    assert new_ct == next_ct
 
 
 def test_test(tmp_path, capsys):
