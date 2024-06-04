@@ -110,9 +110,8 @@ def connect(url):
         sys.argv.remove('True')
         infile_name = sys.argv[1] if len(sys.argv) > 1 else '-'
         read_nights_naps(engine, infile_name)
-    except ValueError as e:
-        print(f'Error connecting to db: {e}')
-        raise
+    except ValueError:
+        pass  # don't touch the db
 
 
 def main():
