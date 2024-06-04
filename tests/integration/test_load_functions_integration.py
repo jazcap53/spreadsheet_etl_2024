@@ -235,13 +235,13 @@ action: w, time: 17:00, hours: 1.00
 #         connect(invalid_url)
 
 
-@pytest.mark.xfail(raises=OperationalError)
-def test_connect_failure():
+def test_connect_bad_url():
     # Invalid database URL
     invalid_url = 'postgresql://invalid_user:invalid_password@localhost/invalid_db'
 
-    # Call connect function with invalid URL
-    connect(invalid_url)
+    with pytest.raises(ValueError):
+        # Call connect function with invalid URL
+        connect(invalid_url)
 
 
 def test_inserting_a_night_adds_one_to_night_count(my_setup):
