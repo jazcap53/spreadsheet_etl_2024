@@ -105,7 +105,7 @@ def set_test_db_name():
 
 @pytest.mark.parametrize("input_data", [
     None,
-    "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:15\n"
+    "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01.25\n"
 ])
 def test_connect_indirectly(tmp_path, db_connection_url, input_data):
     """
@@ -121,7 +121,7 @@ def test_connect_indirectly(tmp_path, db_connection_url, input_data):
     try:
         if input_data is None:
             # Create a test file with sample data
-            sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01:25\n"
+            sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01.25\n"
             test_file_path = tmp_path / "test_file.txt"
             test_file_path.write_text(sample_data)
 
@@ -153,7 +153,7 @@ def test_connect_indirectly(tmp_path, db_connection_url, input_data):
             assert night_record[4] is False  # Check end_no_data
 
             # Check if the nap record was inserted
-            result = connection.execute(text("SELECT * FROM sl_nap WHERE start_time = '14:30:00' AND duration = '01:15'"))
+            result = connection.execute(text("SELECT * FROM sl_nap WHERE start_time = '14:30:00' AND duration = '01:15:00'"))
             nap_record = result.fetchone()
             assert nap_record is not None
 
@@ -225,17 +225,6 @@ action: w, time: 17:00, hours: 1.00
 '''
 
 
-# @pytest.mark.xfail
-# def test_connect_failure(mocker):
-#     # Invalid database URL
-#     invalid_url = 'postgresql://invalid_user:invalid_password@localhost/invalid_db'
-#
-#     # Call connect function with invalid URL
-#     with pytest.raises(Exception):
-#         connect(invalid_url)
-
-
-@pytest.mark.xfail(raises=OperationalError)
 def test_connect_failure():
     # Invalid database URL
     invalid_url = 'postgresql://invalid_user:invalid_password@localhost/invalid_db'
@@ -258,7 +247,6 @@ def test_inserting_a_night_adds_one_to_night_count(my_setup):
                "VALUES (:date_today, :time_now, false, false)")
     data = {'date_today': date_today, 'time_now': time_now}
     connection.execute(sql, data)
-    connection.commit()
     result = connection.execute(text("SELECT count(night_id) FROM sl_night"))
     new_ct = result.fetchone()[0]
     assert orig_ct + 1 == new_ct
@@ -271,7 +259,7 @@ def test_inserting_a_nap_adds_one_to_nap_count(my_setup):
     connection = engine.connect()
     night_id_result = connection.execute(text("SELECT max(night_id) FROM sl_night"))
     night_id = night_id_result.fetchone()[0]
-    result = connection.execute(text("SELECT count(nap_id) FROM sl_nap"))
+    result = connection.execute(text("SELECT max(nap_id) FROM sl_nap"))
     orig_ct = result.fetchone()[0]
     next_ct = orig_ct + 1
     sql = text("INSERT INTO sl_nap(nap_id, start_time, duration, night_id) "
@@ -279,7 +267,7 @@ def test_inserting_a_nap_adds_one_to_nap_count(my_setup):
     data = {'next_ct': next_ct, 'start_time_now': start_time_now, 'duration': duration,
             'night_id': night_id}
     connection.execute(sql, data)
-    result = connection.execute(text("SELECT count(nap_id) FROM sl_nap"))
+    result = connection.execute(text("SELECT max(nap_id) FROM sl_nap"))
     new_ct = result.fetchone()[0]
     assert new_ct == next_ct
 
