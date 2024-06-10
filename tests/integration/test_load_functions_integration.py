@@ -9,6 +9,7 @@ import time
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import sessionmaker, scoped_session
 
 from src.load.load import connect, read_nights_naps, store_nights_naps, setup_load_logger
 
@@ -103,11 +104,19 @@ def set_test_db_name():
         del os.environ['DB_NAME']
 
 
-# Define a function to check if there are any night records
-def no_night_records_exist(my_setup):
-    engine = my_setup
-    connection = engine.connect()
-    night_count_result = connection.execute(text("SELECT count(*) FROM sl_night"))
+@pytest.fixture(scope="module")
+def db_session():
+   url = 'postgresql://{}:{}@localhost/sleep_test'.format(
+           os.environ['DB_USERNAME'], os.environ['DB_PASSWORD'])
+   engine = create_engine(url)
+   Session = scoped_session(sessionmaker(bind=engine))
+   yield Session()
+   Session.remove()
+
+
+# Define a function to check whether there are any night records
+def no_night_records_exist(db_session):
+    night_count_result = db_session.execute(text("SELECT count(*) FROM sl_night"))
     night_count = night_count_result.fetchone()[0]
     return night_count == 0
 
@@ -242,66 +251,35 @@ def test_connect_failure():
     connect(invalid_url)
 
 
-def test_inserting_a_night_adds_one_to_night_count(my_setup):
+def test_inserting_a_night_adds_one_to_night_count(db_session):
     date_time_now = datetime.now()
     date_today = date_time_now.date().isoformat()
     time_now = date_time_now.time().isoformat()
     last_colon_at = time_now.rfind(':')
     time_now = time_now[:last_colon_at] + ':00'
-    engine = my_setup
-    connection = engine.connect()
-    result = connection.execute(text("SELECT count(night_id) FROM sl_night"))
+
+    result = db_session.execute(text("SELECT count(night_id) FROM sl_night"))
     orig_ct = result.fetchone()[0]
+
     sql = text("INSERT INTO sl_night (start_date, start_time, start_no_data, end_no_data) "
                "VALUES (:date_today, :time_now, false, false)")
     data = {'date_today': date_today, 'time_now': time_now}
-    connection.execute(sql, data)
-    result = connection.execute(text("SELECT count(night_id) FROM sl_night"))
+    db_session.execute(sql, data)
+
+    result = db_session.execute(text("SELECT count(night_id) FROM sl_night"))
     new_ct = result.fetchone()[0]
+
     assert orig_ct + 1 == new_ct
 
 
-# def test_inserting_a_nap_adds_one_to_nap_count(my_setup):
-#     start_time_now = datetime.now().time()
-#     duration = '02:45'
-#     engine = my_setup
-#     connection = engine.connect()
-#     night_id_result = connection.execute(text("SELECT max(night_id) FROM sl_night"))
-#     night_id = night_id_result.fetchone()[0]
-#     result = connection.execute(text("SELECT max(nap_id) FROM sl_nap"))
-#     orig_ct = result.fetchone()[0]
-#     next_ct = 1 if orig_ct is None else orig_ct + 1
-#     # next_ct = orig_ct + 1
-#     sql = text("INSERT INTO sl_nap(nap_id, start_time, duration, night_id) "
-#                "VALUES (:next_ct, :start_time_now, :duration, :night_id)")
-#     data = {'next_ct': next_ct, 'start_time_now': start_time_now, 'duration': duration,
-#             'night_id': night_id}
-#     connection.execute(sql, data)
-#     result = connection.execute(text("SELECT max(nap_id) FROM sl_nap"))
-#     new_ct = result.fetchone()[0]
-#     assert new_ct == next_ct
-
-
-@pytest.mark.skipif(no_night_records_exist, reason="No night records exist in the database")
-def test_inserting_a_nap_adds_one_to_nap_count(my_setup):
-    engine = my_setup
-    connection = engine.connect()
-
-    # Check if there are any night records
-    night_count_result = connection.execute(text("SELECT count(*) FROM sl_night"))
-    night_count = night_count_result.fetchone()[0]
-
-    if night_count == 0:
-        pytest.skip("No night records exist in the database")
-
-    # Proceed with the test if there are night records
+def test_inserting_a_nap_adds_one_to_nap_count(db_session):
     start_time_now = datetime.now().time()
     duration = '02:45'
 
-    night_id_result = connection.execute(text("SELECT max(night_id) FROM sl_night"))
+    night_id_result = db_session.execute(text("SELECT max(night_id) FROM sl_night"))
     night_id = night_id_result.fetchone()[0]
 
-    result = connection.execute(text("SELECT max(nap_id) FROM sl_nap"))
+    result = db_session.execute(text("SELECT max(nap_id) FROM sl_nap"))
     orig_ct = result.fetchone()[0]
     next_ct = 1 if orig_ct is None else orig_ct + 1
 
@@ -309,10 +287,11 @@ def test_inserting_a_nap_adds_one_to_nap_count(my_setup):
                "VALUES (:next_ct, :start_time_now, :duration, :night_id)")
     data = {'next_ct': next_ct, 'start_time_now': start_time_now, 'duration': duration,
             'night_id': night_id}
-    connection.execute(sql, data)
+    db_session.execute(sql, data)
 
-    result = connection.execute(text("SELECT max(nap_id) FROM sl_nap"))
+    result = db_session.execute(text("SELECT max(nap_id) FROM sl_nap"))
     new_ct = result.fetchone()[0]
+
     assert new_ct == next_ct
 
 
