@@ -14,6 +14,8 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from src.load.load import connect, read_nights_naps, store_nights_naps, setup_load_logger
 
 
+# ========== FIXTURES ==========
+
 @pytest.fixture(scope="module")
 def test_file(tmp_path):
     # Create a temporary directory
@@ -55,6 +57,9 @@ def db_session():
    Session.remove()
 
 
+# ========== HELPER FUNCTIONS ==========
+
+
 # Define a function to check whether there are any night records
 def no_night_records_exist(db_session):
     night_count_result = db_session.execute(text("SELECT count(*) FROM sl_night"))
@@ -62,16 +67,80 @@ def no_night_records_exist(db_session):
     return night_count == 0
 
 
+def create_test_file(tmp_path, sample_data):
+    """Create a test file with sample data."""
+    test_file_path = tmp_path / "test_file.txt"
+    test_file_path.write_text(sample_data)
+    return test_file_path
+
+
+def set_sys_argv(test_file_path=None):
+    """Set sys.argv based on the presence of a test file path."""
+    if test_file_path:
+        return ["load.py", str(test_file_path), "True"]
+    else:
+        return ["load.py", "True"]
+
+
+def run_load_script(sys_argv, input_data=None):
+    """Run the load.py script as a separate process."""
+    cmd = ["python", "src/load/load.py"] + sys_argv[1:]
+    if input_data:
+        subprocess.run(cmd, input=input_data, text=True, check=True)
+    else:
+        subprocess.run(cmd, check=True)
+    time.sleep(0.5)  # Allow time for data insertion
+
+
+def check_night_record(connection, expected_date, expected_time):
+    """Check if the night record was inserted correctly."""
+    result = connection.execute(text("SELECT * FROM sl_night WHERE start_date = :date AND start_time = :time"),
+                              {"date": expected_date, "time": expected_time})
+    night_record = result.fetchone()
+    assert night_record is not None
+    assert night_record[3] is False  # Check start_no_data
+    assert night_record[4] is False  # Check end_no_data
+
+
+def check_nap_record(connection, expected_time, expected_duration):
+    """Check if the nap record was inserted correctly."""
+    result = connection.execute(text("SELECT * FROM sl_nap WHERE start_time = :time AND duration = :duration"),
+                              {"time": expected_time, "duration": expected_duration})
+    nap_record = result.fetchone()
+    assert nap_record is not None
+
+
+def check_night_record_using_session(db_session, expected_date, expected_time):
+    """Check if the night record was inserted correctly using db_session."""
+    result = db_session.execute(text("SELECT * FROM sl_night WHERE start_date = :date AND start_time = :time"),
+                                {"date": expected_date, "time": expected_time})
+    night_record = result.fetchone()
+    assert night_record is not None
+    assert night_record[3] is False  # Check start_no_data
+    assert night_record[4] is False  # Check end_no_data
+
+
+def check_nap_record_using_session(db_session, expected_time, expected_duration):
+    """Check if the nap record was inserted correctly using db_session."""
+    result = db_session.execute(text("SELECT * FROM sl_nap WHERE start_time = :time AND duration = :duration"),
+                                {"time": expected_time, "duration": expected_duration})
+    nap_record = result.fetchone()
+    assert nap_record is not None
+
+
+# ========== TESTS ==========
+
+
 @pytest.mark.parametrize("input_data", [
     None,
     "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01.25\n"
 ])
-def test_connect_indirectly(tmp_path, db_session, db_connection_url, input_data):
+def test_connect_indirectly(tmp_path, db_connection_url, input_data):
     """
-        Test the connect() functionality indirectly.
+    Test the connect() functionality indirectly.
 
-        NOTE: This test relies on the 'set_test_env_variables' fixture
-        to set the required environment variables for the test database.
+    NOTE: This test relies on the 'set_test_env_variables' fixture
+    to set the required environment variables for the test database.
     """
     # Save the original command line arguments and environment variables
     original_sys_argv = sys.argv.copy()
@@ -79,42 +148,21 @@ def test_connect_indirectly(tmp_path, db_session, db_connection_url, input_data)
 
     try:
         if input_data is None:
-            # Create a test file with sample data
             sample_data = "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01.25\n"
-            test_file_path = tmp_path / "test_file.txt"
-            test_file_path.write_text(sample_data)
-
-            # Inject the necessary command line arguments with the file path
-            sys.argv = ["load.py", str(test_file_path), "True"]
+            test_file_path = create_test_file(tmp_path, sample_data)
+            sys_argv = set_sys_argv(test_file_path)
         else:
-            # Inject the necessary command line arguments without the file path
-            sys.argv = ["load.py", "True"]
+            sys_argv = set_sys_argv()
 
-        # Run the load.py script as a separate process
-        if input_data is None:
-            subprocess.run(["python", "src/load/load.py"] + sys.argv[1:], check=True)
-        else:
-            subprocess.run(["python", "src/load/load.py"] + sys.argv[1:], input=input_data, text=True, check=True)
-
-        # Add a short delay to ensure the script has enough time to complete the data insertion
-        time.sleep(0.5)
+        run_load_script(sys_argv, input_data=input_data if input_data else None)
 
         # Create a database engine using the connection URL
         engine = create_engine(db_connection_url)
 
         # Query the database to check if the data was loaded correctly
         with engine.connect() as connection:
-            # Check if the night record was inserted
-            result = connection.execute(text("SELECT * FROM sl_night WHERE start_date = '2023-06-08' AND start_time = '22:00:00'"))
-            night_record = result.fetchone()
-            assert night_record is not None
-            assert night_record[3] is False  # Check start_no_data
-            assert night_record[4] is False  # Check end_no_data
-
-            # Check if the nap record was inserted
-            result = connection.execute(text("SELECT * FROM sl_nap WHERE start_time = '14:30:00' AND duration = '01:15:00'"))
-            nap_record = result.fetchone()
-            assert nap_record is not None
+            check_night_record(connection, '2023-06-08', '22:00:00')
+            check_nap_record(connection, '14:30:00', '01:15:00')
 
     finally:
         # Restore the original command line arguments and environment variables
@@ -124,9 +172,8 @@ def test_connect_indirectly(tmp_path, db_session, db_connection_url, input_data)
 
 
 def test_lines_in_weeks_out(tmp_path):
-    # Create a temporary input file with the desired content
-    input_file = tmp_path / "test_input.csv"
-    input_file.write_text('''
+    # Create a temporary input file with the desired content using create_test_file
+    input_data = '''
 w,Sun,,,Mon,,,Tue,,,Wed,,,Thu,,,Fri,,,Sat,,,,
 12/4/2016,,,,,,,,,,b,23:45,,w,3:45,4.00,w,2:00,2.75,b,0:00,9.00,,
 ,,,,,,,,,,,,,s,4:45,,s,3:30,,w,5:15,5.25,,
@@ -140,7 +187,8 @@ w,Sun,,,Mon,,,Tue,,,Wed,,,Thu,,,Fri,,,Sat,,,,
 ,,,,,,,,,,,,,b,23:15,7.50,,,,,,,,
 ,,,,,,,,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,,,,,,,,,
-''')
+'''
+    input_file = create_test_file(tmp_path, input_data)
 
     # Run the script as a subprocess and capture its output
     output = subprocess.check_output(["python", "src/extract/run_it.py", str(input_file)])
@@ -212,6 +260,9 @@ def test_inserting_a_night_adds_one_to_night_count(db_session):
 
     assert orig_ct + 1 == new_ct
 
+    # Check if the night record was inserted correctly using check_night_record_using_session
+    check_night_record_using_session(db_session, date_today, time_now)
+
 
 def test_inserting_a_nap_adds_one_to_nap_count(db_session):
     start_time_now = datetime.now().time()
@@ -234,3 +285,6 @@ def test_inserting_a_nap_adds_one_to_nap_count(db_session):
     new_ct = result.fetchone()[0]
 
     assert new_ct == next_ct
+
+    # Check if the nap record was inserted correctly using check_nap_record_using_session
+    check_nap_record_using_session(db_session, start_time_now, duration)
