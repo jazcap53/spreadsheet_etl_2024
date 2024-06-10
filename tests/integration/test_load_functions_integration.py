@@ -15,20 +15,6 @@ from src.load.load import connect, read_nights_naps, store_nights_naps, setup_lo
 
 
 @pytest.fixture(scope="module")
-def my_setup():
-    try:
-        url = 'postgresql://{}:{}@localhost/sleep_test'.format(
-                os.environ['DB_TEST_USERNAME'], os.environ['DB_TEST_PASSWORD'])
-    except KeyError:
-        print('Please set the environment variables DB_TEST_USERNAME and '
-              'DB_TEST_PASSWORD')
-        sys.exit(1)
-    engine = create_engine(url)
-    yield engine
-    engine.dispose()
-
-
-@pytest.fixture(scope="module")
 def test_file(tmp_path):
     # Create a temporary directory
     test_dir = tmp_path / "test_data"
@@ -48,26 +34,6 @@ def test_file(tmp_path):
 
 
 @pytest.fixture(scope="module")
-def dummy_fixture(capsys):
-    print("THE DUMMY FIXTURE IS BEING EXECUTED !!!")
-    my_out, my_err = capsys.readouterr()
-    assert 'DUMMY' in (my_out, my_err)
-
-
-@pytest.fixture(scope="module")
-def db_connection():
-    try:
-        url = 'postgresql://{}:{}@localhost/sleep_test'.format(
-            os.environ['DB_TEST_USERNAME'], os.environ['DB_TEST_PASSWORD'])
-    except KeyError:
-        pytest.skip("Database credentials not found in environment variables")
-
-    engine = create_engine(url)
-    yield engine
-    engine.dispose()
-
-
-@pytest.fixture(scope="module")
 def db_connection_url():
     url = None
     try:
@@ -77,31 +43,6 @@ def db_connection_url():
         pytest.skip("Database credentials not found in environment variables")
 
     yield url
-
-
-@pytest.fixture(autouse=True)
-def set_test_db_name():
-    original_db_name = os.environ.get('DB_NAME')
-    os.environ['DB_NAME'] = 'sleep_test'
-
-    # Store the original value of __name__
-    original_name = getattr(builtins, '__name__', None)
-
-    # Set __name__ to '__main__'
-    builtins.__name__ = '__main__'
-
-    yield
-
-    # Restore the original value of __name__
-    if original_name is not None:
-        builtins.__name__ = original_name
-    else:
-        delattr(builtins, '__name__')
-
-    if original_db_name is not None:
-        os.environ['DB_NAME'] = original_db_name
-    else:
-        del os.environ['DB_NAME']
 
 
 @pytest.fixture(scope="module")
@@ -125,13 +66,13 @@ def no_night_records_exist(db_session):
     None,
     "NIGHT, 2023-06-08, 22:00:00, false, false\nNAP, 14:30:00, 01.25\n"
 ])
-def test_connect_indirectly(tmp_path, db_connection_url, input_data):
+def test_connect_indirectly(tmp_path, db_session, db_connection_url, input_data):
     """
-        Test the connect()  functionality indirectly.
+        Test the connect() functionality indirectly.
 
         NOTE: This test relies on the 'set_test_env_variables' fixture
         to set the required environment variables for the test database.
-        """
+    """
     # Save the original command line arguments and environment variables
     original_sys_argv = sys.argv.copy()
     original_env = os.environ.copy()
@@ -293,14 +234,3 @@ def test_inserting_a_nap_adds_one_to_nap_count(db_session):
     new_ct = result.fetchone()[0]
 
     assert new_ct == next_ct
-
-
-def test_test(tmp_path, capsys):
-    # Create an empty file using tmp_path
-    test_file_path = tmp_path / "test_file.txt"
-    test_file_path.touch()
-
-    # Print the path of the test file
-    print(f"Test file path: {test_file_path}")
-
-    assert True
