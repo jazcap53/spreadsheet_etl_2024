@@ -3,6 +3,14 @@
 -- 2017-04-05
 
 
+DO $$
+   BEGIN
+     IF NOT current_database() = 'sleep' THEN
+       RAISE EXCEPTION 'You are not connected to the production database (sleep). Aborting script.';
+     END IF;
+   END $$;
+
+
 CREATE OR REPLACE FUNCTION sl_insert_night(
     new_start_date text,
     new_start_time text,

@@ -2,6 +2,14 @@
 -- andrew jarcho
 -- 2017-02-16
 
+DO $$
+   BEGIN
+     IF NOT current_database() = 'sleep' THEN
+       RAISE EXCEPTION 'You are not connected to the production database (sleep). Aborting script.';
+     END IF;
+   END $$;
+
+
 DROP TABLE IF EXISTS sl_night CASCADE;
 
 CREATE TABLE sl_night (
