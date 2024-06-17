@@ -2,13 +2,15 @@
 -- andrew jarcho
 -- 2017-02-16
 
+\set ON_ERROR_STOP on
 
+-- Check if connected to the correct database
 DO $$
-   BEGIN
-     IF NOT current_database() = 'sleep_test' THEN
-       RAISE EXCEPTION 'You are not connected to the test database (sleep_test). Aborting script.';
-     END IF;
-   END $$;
+BEGIN
+    IF current_database() != 'sleep_test' THEN
+        RAISE EXCEPTION 'You are not connected to the test database (sleep_test). Aborting script.';
+    END IF;
+END $$;
 
 
 DROP TABLE IF EXISTS sl_night CASCADE;
@@ -34,3 +36,6 @@ CREATE TABLE sl_nap (
     PRIMARY KEY (nap_id),
     FOREIGN KEY (night_id) REFERENCES sl_night (night_id)
 );
+
+
+\set ON_ERROR_STOP off

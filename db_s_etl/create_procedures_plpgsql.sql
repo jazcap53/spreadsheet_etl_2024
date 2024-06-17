@@ -1,7 +1,8 @@
--- file: db/create_procedures.sql
+-- file: db_s_etl/create_procedures.sql
 -- andrew jarcho
 -- 2017-04-05
 
+\set ON_ERROR_STOP on
 
 DO $$
    BEGIN
@@ -55,3 +56,6 @@ EXCEPTION
         RETURN 'error inserting nap into db';
 END;
 $$ LANGUAGE plpgsql;
+
+
+\set ON_ERROR_STOP off

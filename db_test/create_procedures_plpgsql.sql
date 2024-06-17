@@ -1,14 +1,18 @@
--- file: db/create_procedures.sql
+-- file: db_test/create_procedures.sql
 -- andrew jarcho
 -- 2017-04-05
 
 
+-- Set psql to stop on first error
+\set ON_ERROR_STOP on
+
+-- Check if connected to the correct database
 DO $$
-   BEGIN
-     IF NOT current_database() = 'sleep_test' THEN
-       RAISE EXCEPTION 'You are not connected to the test database (sleep_test). Aborting script.';
-     END IF;
-   END $$;
+BEGIN
+    IF current_database() != 'sleep_test' THEN
+        RAISE EXCEPTION 'You are not connected to the test database (sleep_test). Aborting script.';
+    END IF;
+END $$;
 
 
 CREATE OR REPLACE FUNCTION sl_insert_night(
@@ -55,3 +59,5 @@ EXCEPTION
         RETURN 'error inserting nap into db';
 END;
 $$ LANGUAGE plpgsql;
+
+\set ON_ERROR_STOP off
